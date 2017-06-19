@@ -36,25 +36,13 @@ module ExercismWeb
         erb :"site/how_it_works_newbie"
       end
 
-      get '/cli' do
+      %w(overview mac windows linux install).each do |topic|
         # Add OS detection logic & redirect here
-        erb :"site/cli", locals: { docs: X::Docs::CLI.new, page: :overview }
-      end
+        url_pattern = "/#{topic}" unless topic == 'overview'
 
-      get '/cli/mac' do
-        erb :"site/cli", locals: { docs: X::Docs::CLI.new, page: :mac }
-      end
-
-      get '/cli/windows' do
-        erb :"site/cli", locals: { docs: X::Docs::CLI.new, page: :windows }
-      end
-
-      get '/cli/linux' do
-        erb :"site/cli", locals: { docs: X::Docs::CLI.new, page: :linux }
-      end
-
-      get '/cli/install' do
-        erb :"site/cli", locals: { docs: X::Docs::CLI.new, page: :install }
+        get "/clients/cli#{url_pattern}" do
+          erb :"site/cli", locals: { docs: X::Docs::CLI.new, page: topic.to_sym }
+        end
       end
 
       get '/privacy' do
@@ -63,10 +51,6 @@ module ExercismWeb
 
       get '/about' do
         erb :"site/about"
-      end
-
-      get '/contribute' do
-        erb :"site/contribute"
       end
 
       get '/bork' do
@@ -84,6 +68,10 @@ module ExercismWeb
 
       get '/contact' do
         erb :'site/contact'
+      end
+
+      get '/teams/about' do
+        erb :'site/teams'
       end
     end
   end

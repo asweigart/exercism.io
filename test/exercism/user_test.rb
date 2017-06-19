@@ -13,6 +13,11 @@ class UserTest < Minitest::Test
     refute user.guest?
   end
 
+  def test_flipper_id_is_username
+    user = User.new(username: 'spocktocat')
+    assert_equal 'spocktocat', user.flipper_id
+  end
+
   def test_create_user_from_github
     user = User.from_github(23, 'alice', 'alice@example.com', 'avatar_url', 'polyglot')
     assert_equal 1, User.count
@@ -85,15 +90,24 @@ class UserTest < Minitest::Test
     assert_equal %w(alice bob charlie), User.find_or_create_in_usernames(%w(alice BOB charlie)).map(&:username).sort
   end
 
+  def test_recent_comments
+    user = User.create!(username: 'bob')
+    assert_equal 0, user.comments.recent(10).count
+  end
+
   def test_delete_team_memberships_with_user
     alice = User.create(username: 'alice')
     bob = User.create(username: 'bob')
 
-    team = Team.by(alice).defined_with({ slug: 'team a', usernames: bob.username }, alice)
-    other_team = Team.by(alice).defined_with({ slug: 'team b', usernames: bob.username }, alice)
+    team = Team.by(alice).defined_with({ slug: 'team a' }, alice)
+    other_team = Team.by(alice).defined_with({ slug: 'team b' }, alice)
 
     team.save
     other_team.save
+
+    team.invite_with_usernames(bob.username, alice)
+    other_team.invite_with_usernames(bob.username, alice)
+
     TeamMembershipInvite.where(user: bob).first.accept!
 
     assert TeamMembership.exists?(team: team, user: bob, inviter: alice), 'Confirmed TeamMembership for bob was created.'
@@ -149,16 +163,16 @@ class UserTest < Minitest::Test
 
   def test_user_share_key
     fred = User.create(username: 'fred')
-    assert_equal nil, fred.share_key
+    assert_nil fred.share_key
     fred.set_share_key
-    refute_equal nil, fred.share_key
+    refute_nil fred.share_key
     fred.unset_share_key
-    assert_equal nil, fred.share_key
+    assert_nil fred.share_key
   end
 
   def test_user_find_by_username_and_share_key
     fred = User.create(username: 'fred')
-    assert_equal nil, User.find_by(username: 'fred', share_key: Exercism.uuid)
+    assert_nil User.find_by(username: 'fred', share_key: Exercism.uuid)
     fred.set_share_key
     assert_equal 'fred', User.find_by(username: 'fred', share_key: fred.share_key).username
   end

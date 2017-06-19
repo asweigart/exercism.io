@@ -26,6 +26,34 @@ class TeamMembershipInviteTest < Minitest::Test
     assert_equal 0, TeamMembershipInvite.count
   end
 
+  def test_accept_invitation_when_theres_an_unconfirmed_invite
+    team = Team.by(alice).defined_with(slug: 'purple')
+    team.save
+
+    membership = TeamMembership.create!(team: team, user: bob, inviter: alice)
+    invite = TeamMembershipInvite.create!(team: team, user: bob, inviter: alice)
+
+    refute membership.confirmed
+
+    invite.accept!
+
+    assert membership.reload.confirmed
+    assert_equal 0, TeamMembershipInvite.count
+  end
+
+  def test_accept_invitation_with_confirmed_invite
+    team = Team.by(alice).defined_with(slug: 'purple')
+    team.save
+
+    membership = TeamMembership.create!(team: team, user: bob, inviter: alice, confirmed: true)
+    invite = TeamMembershipInvite.create!(team: team, user: bob, inviter: alice)
+
+    invite.accept!
+
+    assert membership.reload.confirmed
+    assert_equal 0, TeamMembershipInvite.count
+  end
+
   def test_refuse_changes_invite_status
     team = Team.by(alice).defined_with(slug: 'purple')
     team.save
@@ -36,5 +64,21 @@ class TeamMembershipInviteTest < Minitest::Test
     refute membership_invite.refused?
     membership_invite.refuse!
     assert membership_invite.refused?
+  end
+
+  def test_retract_invitation
+    team = Team.by(alice).defined_with(slug: 'retract')
+    team.save
+
+    membership_invite = TeamMembershipInvite.new(team: team, user: bob, inviter: alice)
+    membership_invite.save
+
+    assert_equal 1, TeamMembershipInvite.count
+    assert_equal 1, bob.team_membership_invites.count
+
+    team.dismiss_invitation('bob')
+
+    assert_equal 0, TeamMembershipInvite.count
+    assert_equal 0, bob.team_membership_invites.count
   end
 end

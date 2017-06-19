@@ -56,10 +56,6 @@ class Team < ActiveRecord::Base
     tags = [options[:slug], options[:name], options[:tags]].join(',')
     self.tags = Tag.create_from_text(tags)
 
-    users = User.find_or_create_in_usernames(potential_members(options[:usernames])) if options[:usernames]
-    users = options[:users] if options[:users]
-    invite(users, inviter)
-
     self
   end
 
@@ -78,6 +74,13 @@ class Team < ActiveRecord::Base
     users.each do |user|
       TeamMembershipInvite.create(user: user, team: self, inviter: inviter, refused: false)
     end
+  end
+
+  def dismiss_invitation(username)
+    user = User.find_by(username: username)
+    return if user.nil?
+
+    TeamMembershipInvite.where(user: user, team: self).destroy_all
   end
 
   def dismiss(username)
@@ -105,7 +108,7 @@ class Team < ActiveRecord::Base
   end
 
   def members_size
-    members.size + 1 # manager
+    members.size
   end
 
   private
@@ -116,7 +119,7 @@ class Team < ActiveRecord::Base
 
   def normalize_slug
     return unless slug
-    self.slug = slug.tr('_', '-').parameterize('-')
+    self.slug = slug.tr('_', '-').parameterize(separator: '-')
   end
 
   def provide_default_slug

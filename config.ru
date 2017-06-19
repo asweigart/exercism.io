@@ -1,3 +1,5 @@
+require "English"
+
 $LOAD_PATH.unshift File.expand_path("./..", __FILE__)
 $LOAD_PATH.unshift File.expand_path("./../lib", __FILE__)
 
@@ -20,13 +22,16 @@ if ENV['RACK_ENV'] != 'production'
 end
 
 require 'app'
+require 'flipper_app'
 require 'api/v1'
 
 ENV['RACK_ENV'] ||= 'development'
 
-use ActiveRecord::ConnectionAdapters::ConnectionManagement
 use Rack::MethodOverride
-run ExercismWeb::App
+run Rack::URLMap.new(
+  "/" => ExercismWeb::App,
+  "/flipper" => Flipper::UI.app($flipper, &FlipperApp.generator)
+)
 
 map '/api/v1/' do
   run ExercismAPI::App

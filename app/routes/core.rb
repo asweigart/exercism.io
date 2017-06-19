@@ -6,6 +6,7 @@ module ExercismWeb
         set :root, Exercism.relative_to_root('app')
         set :environment, ENV.fetch('RACK_ENV') { :development }.to_sym
         set :method_override, true
+        set :strict_paths, false
 
         enable :raise_errors
       end
@@ -20,9 +21,10 @@ module ExercismWeb
         enable :show_exceptions
       end
 
-      error 500 do
-        metadata = {
-          user: {
+      unless settings.test?
+        error 500 do
+          metadata = {
+            user: {
             id: current_user.id,
             username: current_user.username,
           },
@@ -30,9 +32,10 @@ module ExercismWeb
           app: {
             version: BUILD_ID,
           },
-        }
-        notification = Bugsnag.auto_notify($ERROR_INFO, metadata, request)
-        erb :"errors/internal", locals: { bugsnag_notification: notification }
+          }
+          notification = Bugsnag.auto_notify($ERROR_INFO, metadata, request)
+          erb :"errors/internal", locals: { bugsnag_notification: notification }
+        end
       end
 
       before do
@@ -42,6 +45,7 @@ module ExercismWeb
       use Rack::Flash
 
       helpers Helpers::NotificationCount # total hack
+      helpers Helpers::NotificationByLanguage
       helpers Helpers::FuzzyTime
       helpers Helpers::NgEsc
       helpers Helpers::Markdown
@@ -55,6 +59,7 @@ module ExercismWeb
       helpers Helpers::UserProgressBar
       helpers Helpers::TeamAccess
       helpers WillPaginate::Sinatra::Helpers
+      helpers Helpers::CssUrl
 
       helpers do
         def github_client_id
@@ -95,10 +100,6 @@ module ExercismWeb
 
         def namify(slug)
           slug.to_s.split('-').map(&:capitalize).join('-')
-        end
-
-        def tracks
-          ExercismWeb::Presenters::Tracks.tracks
         end
 
         def css_url

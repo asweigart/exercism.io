@@ -4,12 +4,17 @@
     <aside class="col-md-4">
       <nav class="stats">
         <ul class="nav nav-stacked nav-bordered">
+          <% if $flipper[:participation_stats].enabled?(current_user) %>
+            <li>
+              <a href="/stats">Overview</a>
+            </li>
+          <% end %>
           <% tracks.each do |t|%>
           <li class="<%= 'active' if t.id==track.id%>">
             <a href="/stats/<%= t.id %>">
               <%= t.language %>
               <span class="total-count">
-                <%= t.problems.size %>
+                <%= t.implementations.size %>
               </span>
             </a>
           </li>

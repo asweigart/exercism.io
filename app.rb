@@ -10,15 +10,17 @@ require 'kss'
 require 'tilt/erb'
 
 require_relative './app/presenters'
-require_relative './lib/exercism/xapi'
 
 require_relative './app/helpers'
 require_relative './app/routes'
 
 module ExercismWeb
+  DEFAULT_SESSION_KEY = "Need to know only."
+
   class App < Sinatra::Base
     configure do
-      use Rack::Session::Cookie, secret: ENV.fetch('SESSION_SECRET') { "Need to know only." }
+      use Rack::Session::Cookie, secret: ENV.fetch('SESSION_SECRET', DEFAULT_SESSION_KEY)
+      after { ActiveRecord::Base.connection.close }
     end
 
     if settings.development?
@@ -30,6 +32,7 @@ module ExercismWeb
     use Routes::Inbox
     use Routes::Languages
     use Routes::Static
+    use Routes::Contribute
     use Routes::Legacy
     use Routes::Main
     use Routes::Stats

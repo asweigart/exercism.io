@@ -1,11 +1,12 @@
 <div ng-controller="MarkdownCtrl" class="md-markdown-preview">
   <tabset>
-    <tab heading="Write">
+    <tab class="write_tab" heading="Write">
       <textarea
         id="submission_comment"
         name="body"
         class="comment form-control"
         rows="8"
+        placeholder="<%= VariedResponses.sentence_starter if $flipper[:sentence_starters].enabled?(current_user) %>"
         data-submission-key="<%= submission.key %>"
         ng-model="data.body"
         <%= "ng-init=\"data.body='#{ng_esc(nit.body)}'\"" if defined? nit %>></textarea>
@@ -14,5 +15,18 @@
       <div class="preview" ng-bind-html-unsafe="data.preview"></div>
       <hr>
     </tab>
+    <% if $flipper[:comment_history].enabled?(current_user) && !locals[:comment_history].blank? %>
+      <tab heading="History" class="hidden history_tab">
+      <h5>Select a comment to insert as a starting point</h5>
+        <div class="list-group">
+          <% locals[:comment_history].each do |comment| %>
+            <button type="button" class="list-group-item history_item">
+              <%= comment.body %>
+            </button>
+          <% end %>
+        </div>
+        <hr>
+      </tab>
+    <% end %>
   </tabset>
 </div>

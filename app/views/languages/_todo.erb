@@ -16,18 +16,28 @@
 Once you've picked an exercise, follow the instructions in the <a href="https://github.com/exercism/x-common/blob/master/CONTRIBUTING.md#porting-an-exercise-to-another-language-track" target="_blank">Contributing Guide</a> and submit your pull request to the <a href="<%= track.repository %>" target="_blank"><%= track.language %> track repository</a> on GitHub.
 </p>
 
-<% if track.unimplemented_problems.count.zero? %>
+<% todos = Trackler.todos[track.id] %>
+<% if todos.count.zero? %>
   <div class="col-md-12 jumbotron">
     <p>All exercises are implemented in <%= track.language %>, you will need to <a href="https://github.com/exercism/x-common/blob/master/CONTRIBUTING.md#implementing-a-completely-new-exercise">invent a new exercise.</a></p>
   </div>
 <% else %>
+  <div class="row padding-row todo-heading">
+    <div class="col-lg-4">
+      <h4>Exercises</h4>
+    </div>
+    <div class="col-lg-4 visible-lg-block">
+      <h4>About</h4>
+    </div>
+    <div class="col-lg-4 visible-lg-block">
+      <h4>Examples</h4>
+    </div>
+  </div>
 
-  <% track.unimplemented_problems.each_slice(3) do |todos| %>
-    <div class="row padding-row">
-      <% todos.each do |todo| %>
-        <%= erb :'languages/_contribute_exercise', locals: { exercise: todo} %>
-      <% end %>
+  <% todos.each do |todo| %>
+    <div class="row padding-row exercise-todo">
+      <%= erb :'languages/_contribute_exercise', locals: { problem: todo} %>
     </div>
   <% end %>
-
+  </div>
 <% end %>

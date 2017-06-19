@@ -6,7 +6,11 @@ class User < ActiveRecord::Base
 
   has_many :submissions
   has_many :notifications
-  has_many :comments
+  has_many :comments do
+    def recent(count)
+      order('comments.updated_at DESC').limit(count)
+    end
+  end
   has_many :dailies, -> (user) { limit(Daily::LIMIT - user.daily_count) }
   has_many :daily_counts
   has_many :exercises, class_name: "UserExercise"
@@ -97,6 +101,11 @@ class User < ActiveRecord::Base
 
   def submissions_on(problem)
     submissions.order('id DESC').where(language: problem.track_id, slug: problem.slug)
+  end
+
+  # Some unique identifier
+  def flipper_id
+    username
   end
 
   def guest?

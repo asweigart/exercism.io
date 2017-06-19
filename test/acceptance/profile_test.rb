@@ -17,16 +17,31 @@ class ProfileTest < AcceptanceTestCase
   end
 
   def test_profile_shows_progress
-    @f = './test/fixtures/xapi_v3_tracks.json'
-    X::Xapi.stub(:get, [200, File.read(@f)]) do
-      UserExercise.create(user: @user, language: 'Fake', iteration_count: 1)
-      with_login(@user) do
-        visit '/'
-        click_on 'Profile'
+    UserExercise.create(user: @user, language: 'Fake', iteration_count: 1)
+    with_login(@user) do
+      visit '/'
+      click_on 'Profile'
 
-        assert_content "Progress:"
-        assert_content 'Fake: 1/4 (25%)'
-      end
+      assert_content "Progress:"
+      assert_content 'Fake: 1/4 (25%)'
+    end
+  end
+
+  def test_display_team_invites_only_in_users_own_profile
+    new_user = create_user(username: 'new_user', github_id: 456)
+
+    team = Team.by(@user).defined_with({ slug: 'some-team', name: 'Some Name' }, @user)
+    team.save!
+    team.invite_with_usernames(new_user.username, @user)
+
+    with_login(@user) do
+      visit "/#{new_user.username}"
+      refute_content 'Some Name'
+    end
+
+    with_login(new_user) do
+      visit "/#{new_user.username}"
+      assert_content 'Some Name'
     end
   end
 end

@@ -1,6 +1,7 @@
 namespace :db do
   desc "Fetch seed data from github and save to db/seeds.sql"
   task "seeds:fetch", %s(debug) do |_, args|
+    require 'faraday'
     args.with_defaults(debug: ENV["DEBUG"])
     puts "fetching over the wire"
     conn = Faraday.new(url: "https://raw.githubusercontent.com") do |c|
@@ -20,15 +21,10 @@ namespace :db do
   desc "reset db and reseed data"
   task reseed: ["db:drop", "db:create", "db:migrate", "db:seed"]
 
-  task :connection do
-    require 'bundler'
-    Bundler.require
-    require 'exercism'
-    require_relative '../db/config'
-  end
-
   desc "generate seed data"
   task seed: [:connection] do
+    fail "Seeding the test database would cause many tests to fail." if ENV['RACK_ENV'] == 'test'
+    require_comments
     config = DB::Config.new
     # rubocop:disable Style/AlignParameters
     system({ 'PGPASSWORD' => config.password },
@@ -43,6 +39,7 @@ namespace :db do
 
   desc "generate seed data on Heroku"
   task heroku_seed: [:connection] do
+    require_comments
     if ENV['DATABASE_URL']
       system('psql', ENV['DATABASE_URL'], '-f', 'db/seeds.sql')
       # Trigger generation of html body
@@ -51,5 +48,10 @@ namespace :db do
       puts "No DATABASE_URL environment variable found. Did you add postgresql addon?"
       puts "If you're trying to run this task on your local machine, prefer the `db:seed` task instead"
     end
+  end
+
+  def require_comments
+    require 'exercism/converts_markdown_to_html'
+    require 'exercism/comment'
   end
 end

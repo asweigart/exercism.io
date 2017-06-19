@@ -1,12 +1,7 @@
 namespace :data do
   namespace :cleanup do
     desc "normalize action names"
-    task :notifications do
-      require 'active_record'
-      require 'db/connection'
-
-      DB::Connection.establish
-
+    task notifications: [:connection] do
       sql = <<-SQL
       UPDATE notifications
       SET action=(CASE
@@ -20,14 +15,9 @@ namespace :data do
     end
 
     desc "fix broken iterations with missing language"
-    task :missing_language do
-      require 'active_record'
-      require 'db/connection'
-      require './lib/exercism/submission'
-      require './lib/exercism/user_exercise'
-      require './lib/exercism/user'
-      require './lib/exercism/acl'
-      DB::Connection.establish
+    task missing_language: [:connection] do
+      # Submission#before_create requires Exercism.uuid
+      require 'exercism'
 
       Submission.where(language: '').find_each do |submission|
         submission.language = submission.slug
@@ -67,10 +57,7 @@ namespace :data do
     end
 
     desc "fix iteration count"
-    task :iteration_counts do
-      require 'active_record'
-      require 'db/connection'
-      DB::Connection.establish
+    task iteration_counts: [:connection] do
 
       # update the count for all exercises with submissions
       sql = <<-SQL
@@ -102,11 +89,7 @@ namespace :data do
     end
 
     desc "delete orphan comments"
-    task :comments do
-      require 'active_record'
-      require 'db/connection'
-
-      DB::Connection.establish
+    task comments: [:connection] do
 
       sql = <<-SQL
       DELETE FROM comments WHERE id IN (
@@ -123,11 +106,7 @@ namespace :data do
 
   namespace :migrate do
     desc "migrate subscriptions"
-    task :subscriptions do
-      require 'active_record'
-      require 'db/connection'
-
-      DB::Connection.establish
+    task subscriptions: [:connection] do
 
       # CAN ONLY BE USED PRIOR TO EXPOSING SUBSCRIBE/UNSUBSCRIBE IN UI.
 
@@ -166,11 +145,7 @@ namespace :data do
     end
 
     desc "migrate last iteration timestamps"
-    task :last_iteration do
-      require 'active_record'
-      require 'db/connection'
-
-      DB::Connection.establish
+    task last_iteration: [:connection] do
 
       sql = <<-SQL
       UPDATE user_exercises ex SET last_iteration_at=t.ts
@@ -185,11 +160,7 @@ namespace :data do
     end
 
     desc "reset last activity timestamps and descriptions"
-    task :last_activity do
-      require 'active_record'
-      require 'db/connection'
-      require './lib/exercism'
-      DB::Connection.establish
+    task last_activity: [:connection] do
 
       # Reset all exercises to have "last activity" be the submission.
       sql = <<-SQL
@@ -238,15 +209,12 @@ namespace :data do
     end
 
     desc "migrate acls"
-    task :acls do
-      require 'active_record'
-      require 'db/connection'
-      require './lib/exercism/acl'
-      require './lib/exercism/named'
-      require './lib/exercism/problem'
-      require './lib/exercism/submission'
-      require './lib/exercism/user'
-      DB::Connection.establish
+    task acls: [:connection] do
+      require 'exercism/acl'
+      require 'exercism/named'
+      require 'exercism/problem'
+      require 'exercism/submission'
+      require 'exercism/user'
 
       Submission.find_each do |submission|
         if submission.user.present?
@@ -256,15 +224,12 @@ namespace :data do
     end
 
     desc "migrate mentor acls"
-    task :mentor_acls do
-      require 'active_record'
-      require 'db/connection'
-      require './lib/exercism/acl'
-      require './lib/exercism/named'
-      require './lib/exercism/problem'
-      require './lib/exercism/submission'
-      require './lib/exercism/user'
-      DB::Connection.establish
+    task mentor_acls: [:connection] do
+      require 'exercism/acl'
+      require 'exercism/named'
+      require 'exercism/problem'
+      require 'exercism/submission'
+      require 'exercism/user'
 
       User.where('track_mentor IS NOT NULL').where("track_mentor != '--- []\n'").find_each do |user|
         Submission.select('DISTINCT language, slug').where(language: user.track_mentor).each do |submission|
@@ -274,10 +239,7 @@ namespace :data do
     end
 
     desc "migrate unconfirmed memberships to membership_invites"
-    task :migrate_unconfirmed_memberships do
-      require 'active_record'
-      require 'db/connection'
-      DB::Connection.establish
+    task migrate_unconfirmed_memberships: [:connection] do
 
       sql = <<-SQL
         INSERT INTO team_membership_invites(team_id, user_id, inviter_id, created_at, updated_at)
@@ -287,6 +249,49 @@ namespace :data do
       SQL
 
       ActiveRecord::Base.connection.execute(sql)
+    end
+  end
+
+  namespace :generate do
+    desc "generate N users, typically for performance testing"
+    task users: [:connection] do
+      n = ENV['N'].to_i
+      abort 'specify the number of users to generate: N=<count>' if n.zero?
+      puts "Generating #{n} users"
+      ActiveRecord::Base.connection.execute <<~SQL
+        INSERT INTO users (crc32mod100, created_at, updated_at) (
+          SELECT
+            floor(random() * 100),
+            now() - '4 years'::interval * abs(1 - random() ^ 2) AS created_at,
+            now() AS updated_at
+          FROM generate_series(1, #{n})
+        )
+      SQL
+    end
+
+    desc "generate N comments, typically for performance testing"
+    task comments: [:connection] do
+      n = ENV['N'].to_i
+      abort 'specify the number of comments to generate: N=<count>' if n.zero?
+      puts "Generating #{n} comments"
+      ActiveRecord::Base.connection.execute <<~SQL
+        INSERT INTO comments (submission_id, user_id, body, html_body, created_at, updated_at) (
+          SELECT
+            submission_id,
+            user_id,
+            body,
+            html_body,
+            now() - '4 years'::interval * abs(1 - random() ^ 2) AS created_at,
+            now() AS updated_at
+          FROM generate_series(1, #{n})
+          JOIN (SELECT id submission_id, row_number() OVER (ORDER BY random()) AS submissions_row_number FROM submissions) random_submissions
+            ON submissions_row_number = generate_series % (SELECT count(*) FROM submissions)
+          JOIN (SELECT id user_id,       row_number() OVER (ORDER BY random()) AS users_row_number FROM users) random_users
+            ON users_row_number       = generate_series % (SELECT count(*) FROM users)
+          JOIN (SELECT body, html_body,  row_number() OVER (ORDER BY random()) AS comments_row_number FROM comments) random_comments
+            ON comments_row_number    = generate_series % (SELECT count(*) FROM comments)
+        )
+      SQL
     end
   end
 end

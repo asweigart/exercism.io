@@ -7,6 +7,7 @@ module ExercismWeb
       Markdown: 'markdown',
       Syntax: 'syntax',
       NotificationCount: 'notification_count',
+      NotificationByLanguage: 'notification_by_language',
       Gravatar: 'gravatar',
       Profile: 'profile',
       Submission: 'submission',
@@ -14,6 +15,7 @@ module ExercismWeb
       TrackImage: 'track_image',
       UserProgressBar: 'user_progress_bar',
       TeamAccess: 'team_access',
+      CssUrl: 'css_url',
     }.each do |name, file|
       autoload name, Exercism.relative_to_root('app', 'helpers', file)
     end

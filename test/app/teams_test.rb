@@ -71,9 +71,10 @@ class TeamsTest < Minitest::Test
   end
 
   def test_user_must_be_manager
-    team = Team.by(alice).defined_with(slug: 'abc', usernames: bob.username)
-    team.save
+    team = Team.by(alice).defined_with(slug: 'abc')
+    team.save!
 
+    team.invite_with_usernames(bob.username, alice)
     TeamMembershipInvite.pending.find_by(user: bob, team: team).accept!
 
     [
@@ -90,27 +91,37 @@ class TeamsTest < Minitest::Test
     end
   end
 
+  def test_logged_in_user_can_search_teams
+    [
+      [:get, '/teams'],
+      [:get, '/teams/']
+    ].each do |verb, endpoint|
+      send verb, endpoint, {}, login(alice)
+      assert_equal 200, last_response.status
+      assert_match(/teams/i, last_response.body)
+    end
+  end
+
   def test_user_must_be_on_team_to_view_team_page
-    team = Team.by(alice).defined_with(slug: 'abc', usernames: bob.username)
+    team = Team.by(alice).defined_with(slug: 'abc')
     team.save
 
-    f = './test/fixtures/xapi_v3_tracks.json'
-    X::Xapi.stub(:get, [200, File.read(f)]) do
-      get '/teams/abc/directory', {}, login(alice)
-      assert_equal 200, last_response.status
+    get '/teams/abc/directory', {}, login(alice)
+    assert_equal 200, last_response.status
 
-      get '/teams/abc/directory', {}, login(bob)
-      assert_equal 302, last_response.status
-      assert_equal "http://example.org/", last_response.location
+    get '/teams/abc/directory', {}, login(bob)
+    assert_equal 302, last_response.status
+    assert_equal "http://example.org/", last_response.location
 
-      TeamMembershipInvite.pending.find_by(user: bob, team: team).accept!
-      get '/teams/abc/directory', {}, login(bob)
-      assert_equal 200, last_response.status
+    team.invite_with_usernames(bob.username, alice)
+    TeamMembershipInvite.pending.find_by(user: bob, team: team).accept!
 
-      get '/teams/abc/directory', {}, login(charlie)
-      assert_equal 302, last_response.status
-      assert_equal "http://example.org/", last_response.location
-    end
+    get '/teams/abc/directory', {}, login(bob)
+    assert_equal 200, last_response.status
+
+    get '/teams/abc/directory', {}, login(charlie)
+    assert_equal 302, last_response.status
+    assert_equal "http://example.org/", last_response.location
   end
 
   def test_team_creation_with_name
@@ -171,7 +182,6 @@ class TeamsTest < Minitest::Test
 
   def test_team_creation_with_multiple_members
     post '/teams/new', { team: { slug: 'members', usernames: "#{bob.username},#{charlie.username}" } }, login(alice)
-
     team = Team.first
 
     bob.reload
@@ -196,6 +206,21 @@ class TeamsTest < Minitest::Test
     [alice, bob, charlie].each { |member| assert team.includes?(member) }
   end
 
+  def test_manager_is_automatically_added_as_team_member
+    post '/teams/new', { team: { slug: 'awesome' } }, login(alice)
+    team = Team.first
+
+    assert TeamMembership.exists?(user: alice, team: team)
+  end
+
+  def test_manager_is_not_invited_when_adding_itself_in_member_list
+    post '/teams/new', { team: { slug: 'awesome', usernames: alice.username } }, login(alice)
+    team = Team.first
+
+    refute TeamMembershipInvite.exists?(user: alice, team: team)
+    assert TeamMembership.exists?(user: alice, team: team)
+  end
+
   def test_member_removal
     team = Team.by(alice).defined_with(slug: 'awesome', usernames: "#{bob.username},#{charlie.username}")
     team.save
@@ -209,8 +234,10 @@ class TeamsTest < Minitest::Test
   end
 
   def test_leave_team
-    team = Team.by(alice).defined_with(slug: 'awesome', usernames: "#{bob.username},#{charlie.username}")
+    team = Team.by(alice).defined_with(slug: 'awesome')
     team.save
+
+    team.invite_with_usernames("#{bob.username},#{charlie.username}", alice)
 
     put "/teams/#{team.slug}/accept_invite", {}, login(bob)
     put "/teams/#{team.slug}/leave", {}, login(bob)
@@ -221,8 +248,10 @@ class TeamsTest < Minitest::Test
   end
 
   def test_only_managers_can_dismiss_other_members
-    team = Team.by(alice).defined_with(slug: 'members', usernames: "#{bob.username},#{charlie.username}")
+    team = Team.by(alice).defined_with(slug: 'members')
     team.save
+
+    team.invite_with_usernames("#{bob.username},#{charlie.username}", alice)
 
     post "/teams/#{team.slug}/invitation/accept", {}, login(charlie)
     delete "/teams/#{team.slug}/members/#{charlie.username}", {}, login(bob)
@@ -234,8 +263,10 @@ class TeamsTest < Minitest::Test
   end
 
   def test_view_a_team_as_a_member
-    team = Team.by(alice).defined_with(slug: 'members', usernames: "#{bob.username},#{charlie.username}")
+    team = Team.by(alice).defined_with(slug: 'members')
     team.save
+
+    team.invite_with_usernames("#{bob.username},#{charlie.username}", alice)
 
     # unconfirmed member
     get "/teams/#{team.slug}", {}, login(bob)
@@ -244,29 +275,23 @@ class TeamsTest < Minitest::Test
 
     post "/teams/#{team.slug}/invitation/accept", {}, login(bob)
 
-    f = './test/fixtures/xapi_v3_tracks.json'
-    X::Xapi.stub(:get, [200, File.read(f)]) do
-      get "/teams/#{team.slug}/directory", {}, login(bob)
-    end
+    get "/teams/#{team.slug}/directory", {}, login(bob)
 
     assert_response_status(200)
   end
 
   def test_view_an_escaped_team_name
-    team = Team.by(alice).defined_with(slug: 'members', name: "<script>alert('esc_test');</script>", usernames: "#{bob.username},#{charlie.username}")
+    team = Team.by(alice).defined_with(slug: 'members', name: "<script>alert('esc_test');</script>")
     team.save
 
-    f = './test/fixtures/xapi_v3_tracks.json'
-    X::Xapi.stub(:get, [200, File.read(f)]) do
-      get "/teams/#{team.slug}/directory", {}, login(alice)
-    end
+    get "/teams/#{team.slug}/directory", {}, login(alice)
 
     assert_response_status(200)
     assert last_response.body.include?('&lt;script&gt;alert(&#x27;esc_test&#x27;)')
   end
 
   def test_view_team_as_a_non_member
-    team = Team.by(alice).defined_with(slug: 'members', usernames: bob.username.to_s)
+    team = Team.by(alice).defined_with(slug: 'members')
     team.save
 
     get "/teams/#{team.slug}/directory", {}, login(charlie)
@@ -275,8 +300,11 @@ class TeamsTest < Minitest::Test
   end
 
   def test_delete_team_without_being_manager
-    team = Team.by(alice).defined_with(slug: 'delete', usernames: bob.username.to_s)
+    team = Team.by(alice).defined_with(slug: 'delete')
     team.save
+
+    team.invite_with_usernames(bob.username, alice)
+    post "/teams/#{team.slug}/invitation/accept", {}, login(bob)
 
     delete "/teams/#{team.slug}", {}, login(bob)
 
@@ -285,7 +313,7 @@ class TeamsTest < Minitest::Test
   end
 
   def test_delete_team_as_manager
-    team = Team.by(alice).defined_with(slug: 'delete', usernames: bob.username.to_s)
+    team = Team.by(alice).defined_with(slug: 'delete')
     team.save
 
     delete "/teams/#{team.slug}", {}, login(alice)
@@ -296,7 +324,7 @@ class TeamsTest < Minitest::Test
   end
 
   def test_edit_teams_attributes
-    team = Team.by(alice).defined_with(slug: 'edit', usernames: bob.username.to_s, description: 'No name')
+    team = Team.by(alice).defined_with(slug: 'edit', description: 'No name')
     team.save
 
     refute team.public?
@@ -364,5 +392,76 @@ class TeamsTest < Minitest::Test
     assert_response_status 302
     assert_equal "http://example.org/teams/condor/manage", last_response.location
     assert_equal [alice.id], team.reload.managers.map(&:id)
+  end
+
+  def test_view_streams_as_non_member
+    team = Team.by(alice).defined_with(slug: 'awesome')
+    team.save!
+    team.invite_with_usernames(charlie.username, alice)
+    TeamMembershipInvite.pending.find_by(user: charlie, team: team).accept!
+
+    # Charlie has submitted one exercise, but Bob is not the same team.
+    create_exercise_with_submission(charlie, 'fake', 'hello-world')
+
+    get '/teams/awesome/streams', {}, login(bob)
+    assert_response_status 302
+    assert_equal "http://example.org/", last_response.location
+
+    get '/teams/awesome/streams/tracks/ruby', {}, login(bob)
+    assert_response_status 302
+    assert_equal "http://example.org/", last_response.location
+
+    get '/teams/awesome/streams/tracks/ruby/exercises/bob', {}, login(bob)
+    assert_response_status 302
+    assert_equal "http://example.org/", last_response.location
+
+    get '/teams/awesome/streams/users/charlie', {}, login(bob)
+    assert_response_status 302
+    assert_equal "http://example.org/", last_response.location
+
+    get '/teams/awesome/streams/users/charlie/tracks/ruby', {}, login(bob)
+    assert_response_status 302
+    assert_equal "http://example.org/", last_response.location
+  end
+
+  def test_view_streams_as_member
+    team = Team.by(alice).defined_with(slug: 'awesome')
+    team.save!
+    team.invite_with_usernames("#{bob.username},#{charlie.username}", alice)
+    TeamMembershipInvite.pending.find_by(user: bob, team: team).accept!
+    TeamMembershipInvite.pending.find_by(user: charlie, team: team).accept!
+
+    # Charlie has submitted one exercise, and Bob is in the same team.
+    create_exercise_with_submission(charlie, 'fake', 'hello-world')
+
+    get '/teams/awesome/streams', {}, login(bob)
+    assert_response_status 200
+
+    get '/teams/awesome/streams/tracks/fake', {}, login(bob)
+    assert_response_status 200
+
+    get '/teams/awesome/streams/tracks/fake/exercises/charlie', {}, login(bob)
+    assert_response_status 200
+
+    get '/teams/awesome/streams/users/charlie', {}, login(bob)
+    assert_response_status 200
+
+    get '/teams/awesome/streams/users/charlie/tracks/fake', {}, login(bob)
+    assert_response_status 200
+  end
+
+  private
+
+  def create_exercise_with_submission(user, language, slug, ts=1.day.ago)
+    exercise = UserExercise.create!(user_id: user.id, language: language, slug: slug, iteration_count: 1, last_activity_at: ts)
+    attributes = {
+      user_id: exercise.user_id,
+      user_exercise_id: exercise.id,
+      language: exercise.language,
+      slug: exercise.slug,
+      created_at: ts,
+      updated_at: ts,
+    }
+    Submission.create!(attributes)
   end
 end

@@ -1,7 +1,9 @@
 
-## Linux 
+## Linux
 
-View the CLI releases to [choose and download the appropriate package for your operating system](https://github.com/exercism/cli/releases/tag/v2.3.0).
+### Installing the Exercism CLI
+
+View the latest CLI release to [choose and download the appropriate package for your operating system](https://github.com/exercism/cli/releases/latest).
 
 If you're unsure what architecture your processor has, the command `uname -m` should tell you.
 
@@ -28,7 +30,7 @@ echo 'export PATH=$HOME/bin:$PATH' >> ~/.bashrc
 
 To check which shell you have, run `echo $SHELL`.
 
-### Package Managers 
+### Package Managers
 
 These are not officially supported, and sometimes (often) lag behind the latest release.
 
@@ -65,8 +67,20 @@ You can configure a different directory by passing the `--dir` option:
 exercism configure --dir=~/some/other/place
 ```
 
-### Continue 
+COMPLETION_SECTION
+
+### Continue
 You can now continue by [choosing a language](http://exercism.io/languages).
+
+### Uninstalling the Exercism CLI
+
+Remove the file from the `~/bin` directory with the following command:
+
+```bash
+rm ~/bin/exercism
+```
+
+### Help
 
 If you need help, view the [help on exercism.io](http://exercism.io/help), [join the exercism.io chat on gitter](https://gitter.im/exercism/support): [![Join the chat at https://gitter.im/exercism/support](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/exercism/support)
 

@@ -25,10 +25,6 @@ module ExercismWeb
         @exercises ||= user.exercises.where(archived: false).where('iteration_count > 0')
       end
 
-      def progress_hash
-        UserProgression.user_progress(user).sort_by(&:last_updated)
-      end
-
       def user_tracks_summary
         @user_tracks_summary ||= UserTracksSummary.call(user)
       end
@@ -54,7 +50,11 @@ module ExercismWeb
       end
 
       def teams
-        user.team_invites | user.teams | user.managed_teams
+        user.teams | user.managed_teams | team_invites
+      end
+
+      def team_invites
+        own? ? user.team_invites : []
       end
 
       def has_teams?

@@ -12,7 +12,7 @@ class UserFinishedTracks
 
   def completed_tracks
     @completed_tracks ||= started_tracks.each_with_object([]) do |db_row, arr|
-      track = tracks.find { |t| t.id == db_row['track_id'] }
+      track = Trackler.tracks[db_row['track_id']]
       arr << track if completed?(db_row, track)
       arr
     end
@@ -25,12 +25,12 @@ class UserFinishedTracks
   end
 
   def count_finished_problems(user_finished_exercises, track)
-    (user_finished_exercises & track.problems.map(&:slug)).size
+    (user_finished_exercises & track.implementations.map(&:slug)).size
   end
 
   def completed?(user_track, full_track)
     problems_solved = count_finished_problems(user_track['completed_problems'].split(','), full_track)
-    problems_solved >= full_track.problems.size
+    problems_solved >= full_track.implementations.size
   end
 
   def completed_count_sql
@@ -41,9 +41,5 @@ class UserFinishedTracks
     AND (iteration_count > 0 OR skipped_at IS NOT NULL)
     GROUP BY language
     SQL
-  end
-
-  def tracks
-    @track ||= X::Track.all
   end
 end

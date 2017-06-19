@@ -1,4 +1,6 @@
 //TODO move all variable declaration to the tops of functions.
+var submissionViewLayout;
+
 $(function() {
   $(".pending-submission, .work").each(function(index,element) {
     var elem = $(element);
@@ -20,8 +22,11 @@ $(function() {
     codeDiv.addClass($(this).data("new-class"));
     commentsDiv.removeClass($(this).data("old-class"));
     commentsDiv.addClass($(this).data("new-class"));
-    $(this).hide();
+    $("a[data-action='enlarge']",codeDiv).hide();
     $("a[data-action='shrink']",codeDiv).show();
+    window.scrollBy(0, $('.code').offset().top -
+                       $('.theiaStickySidebar').offset().top);
+    submissionViewLayout = 1; // One full-width column of code and comments
   });
 
   $(".code a[data-action='shrink']").on("click",function() {
@@ -31,8 +36,9 @@ $(function() {
     codeDiv.addClass($(this).data("new-class"));
     commentsDiv.removeClass($(this).data("old-class"));
     commentsDiv.addClass($(this).data("new-class"));
-    $(this).hide();
+    $("a[data-action='shrink']",codeDiv).hide();
     $("a[data-action='enlarge']",codeDiv).show();
+    submissionViewLayout = 2; // Two columns for code/comments
   });
 
   $('form').on('submit', function() {
@@ -113,7 +119,7 @@ $(function() {
       var timeZoneAbbrevation = moment.tz(localizedTime.format("YYYY-MM-DD"), timeZone).format('z');
       // PST or PDT
 
-      var formattedTime = localizedTime.format("D MMMM YYYY [at] h:mm ");
+      var formattedTime = localizedTime.format("D MMMM YYYY [at] H:mm ");
       return formattedTime + timeZoneAbbrevation;
     }
 
@@ -128,4 +134,41 @@ $(function() {
     });
   }());
 
+  $(".comment-meta a[data-action='reply']").click(function() {
+    var commentBodyDiv = $(this).closest(".comment-body");
+    var nitRaw = commentBodyDiv.data('nit-raw');
+    var nitpicker = commentBodyDiv.data('nitpicker');
+
+    // construct reply
+    var nitQuoted = "@" + nitpicker + " commented:\n";
+    nitQuoted += nitRaw.split('\n').map(function(x) { return "> " + x; }).join('\n');
+    nitQuoted += '\n' + '\n';
+
+    // switch to 'Write' tab incase 'Preview' tab was selected
+    $(".write_tab").find('a').trigger('click');
+
+    // set reply
+    var submissionCommentTextArea = $('#submission_comment');
+    submissionCommentTextArea.val(nitQuoted);
+    submissionCommentTextArea.trigger('input');
+    submissionCommentTextArea.focus();
+  });
+
 });
+
+// color change on hover for SVG logo in navbar
+var hoverSVG = function(fill) {
+  var svg = document.getElementById("logo-mark");
+  var svgDoc = svg.contentDocument;
+  var e = svgDoc.getElementById("shape");
+  e.style.transition = "all 200ms ease-in-out";
+  e.setAttribute("fill",fill);
+};
+var mouseoverSVG = function() {
+  hoverSVG('#d81d4e');
+};
+var mouseoutSVG = function() {
+  hoverSVG('#bbb');
+};
+$("#nav-brand").on('mouseover', mouseoverSVG);
+$("#nav-brand").on('mouseout', mouseoutSVG);

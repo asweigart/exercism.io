@@ -1,24 +1,18 @@
 namespace :db do
-  require 'open3'
-  require 'bundler'
   require 'English'
-  Bundler.require
-  require_relative '../db/config'
-  require_relative '../db/connection'
-  DB::Connection.establish
 
   desc "migrate your database"
-  task :migrate do
+  task migrate: [:connection] do
     ActiveRecord::Migrator.migrate('./db/migrate')
   end
 
-  task :rollback do
+  task rollback: [:connection] do
     step = ENV['STEP'] ? ENV['STEP'].to_i : 1
     ActiveRecord::Migrator.rollback('./db/migrate', step)
   end
 
   namespace :migrate do
-    task :down do
+    task down: [:connection] do
       version = ENV['VERSION'] ? ENV['VERSION'].to_i : nil
       fail 'VERSION is required - To go down one migration, run db:rollback' unless version
       ActiveRecord::Migrator.run(:down, './db/migrate', version)
@@ -27,6 +21,8 @@ namespace :db do
 
   desc "set up your database"
   task :setup do
+    require 'open3'
+    require 'db/connection'
     user = DB::Connection.escape(config.username)
     pass = DB::Connection.escape(config.password)
 
@@ -42,12 +38,23 @@ namespace :db do
       system 'psql', '-h', config.host, '-p', config.port, '-c', sql, '-d', 'postgres'
     end
 
-    system 'createdb', '-h', config.host, '-p', config.port, '-U', config.username, config.database
-    fail "Failed to create database" unless $CHILD_STATUS.success?
+    if system "psql -lqtA | grep -q #{config.database}"
+      $stdout.puts "#{config.database} already exists"
+    else
+      system 'createdb', '-h', config.host, '-p', config.port, '-U', config.username, config.database
+      unless $CHILD_STATUS.success?
+        fail "Failed to create database"
+      end
+    end
   end
 
-  desc "drop and recreate your database"
-  task reset: %i(drop create)
+  desc "drop and recreate and migrate your database"
+  task reset: %i(drop create migrate) do
+    unless ENV['RACK_ENV'] == 'test'
+      puts "You probably want to seed the database now: bundle exec rake db:seed"
+    end
+  end
+
 
   desc "drop your database"
   task :drop do
@@ -77,7 +84,7 @@ namespace :db do
       now = Time.now.strftime("%Y%m%d%H%M")
       filename = "./db/migrate/#{now}_#{name.underscore}.rb"
       text = <<-text
-class #{name.camelcase} < ActiveRecord::Migration
+class #{name.camelcase} < ActiveRecord::Migration[5.1]
   def change
   end
 end
@@ -89,6 +96,7 @@ end
   end
 
   def config
+    require 'db/config'
     DB::Config.new
   end
 end
